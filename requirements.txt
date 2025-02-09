@@ -1,0 +1,10 @@
+httpx
+langchain
+langchain-groq
+langchain_community
+langgraph
+langgraph-checkpoint-sqlite
+tavily-python
+langsmith
+grandalf
+Ipython
