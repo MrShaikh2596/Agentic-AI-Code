@@ -7,4 +7,5 @@ langgraph-checkpoint-sqlite
 tavily-python
 langsmith
 grandalf
-Ipython
+ipython
+typing-extensions
