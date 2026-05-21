@@ -3,7 +3,7 @@ import random
 from typing import Literal
 # from Ipython.display import Image,display
 from langgraph.graph import StateGraph, START, END
-
+from ollama import chat
 
 class State(TypedDict):
     graph_info: str
@@ -21,6 +21,7 @@ def cricket(state: State):
     return {"graph_info": state["graph_info"] + " cricket"}
 
 
+
 def horseriding(state: State):
     print("horseriding Node started")
     return {"graph_info": state["graph_info"] + " "}
@@ -32,6 +33,13 @@ def decide_play(state: State) -> Literal["cricket", "horseriding"]:
         return "cricket"
     else:
         return "horseriding"
+def decide_play_llm(state:State):
+    response = chat(
+    model='granite4.1:3b',
+    messages=[{'role': 'user', 'content': """Just output one of the following values at random each time:["cricket","horseriding"]"""}])
+    return response.message.content
+
+
 
 
 # creating stategrpah
@@ -42,7 +50,8 @@ graph.add_node("horseriding", horseriding)
 
 # adding edges
 graph.add_edge(START, "start_play")
-graph.add_conditional_edges("start_play", decide_play)
+#graph.add_conditional_edges("start_play", decide_play)
+graph.add_conditional_edges("start_play", decide_play_llm)
 graph.add_edge("cricket", END)
 graph.add_edge("horseriding", END)
 
