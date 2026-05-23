@@ -4,6 +4,10 @@ from typing import Literal
 # from Ipython.display import Image,display
 from langgraph.graph import StateGraph, START, END
 from ollama import chat
+import os
+from dotenv import load_dotenv
+# Call it to load variables from a .env file into os.environ
+load_dotenv()
 
 class State(TypedDict):
     graph_info: str

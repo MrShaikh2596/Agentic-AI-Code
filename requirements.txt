@@ -9,3 +9,6 @@ langsmith
 grandalf
 ipython
 typing-extensions
+langchain-tavily
+python-dotenv
+langchain_ollama
