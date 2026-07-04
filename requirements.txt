@@ -12,3 +12,7 @@ typing-extensions
 langchain-tavily
 python-dotenv
 langchain_ollama
+fastapi
+uvicorn
+streamlit 
+requests
