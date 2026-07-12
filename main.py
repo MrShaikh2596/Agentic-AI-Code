@@ -23,7 +23,7 @@ from langchain_ollama import ChatOllama
 
 llm = ChatOllama(
     #model="qwen3.5:0.8b",
-    model="qwen3.5:0.8b",
+    model="qwen3.5:2b",
     temperature=0,
     # other params...
 )
