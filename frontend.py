@@ -29,16 +29,30 @@ if user_input := st.chat_input("Type your message here..."):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                
-                response = requests.post(FASTAPI_URL, params={"user_message": user_input})
+                # 1. Add stream=True to the request
+                response = requests.post(
+                    FASTAPI_URL, 
+                    params={"user_message": user_input}, 
+                    stream=True
+                )
                 
                 if response.status_code == 200:
-                    bot_reply = response.text
+                    # 2. Create a generator that yields text chunks
+                    def chunk_generator():
+                        # Adjust decoding/chunk size depending on your FastAPI setup
+                        for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
+                            if chunk:
+                                yield chunk
+
+                    # 3. Stream the response live to the UI
+                    bot_reply = st.write_stream(chunk_generator())
                 else:
                     bot_reply = f"Error: Received status code {response.status_code}"
-            except requests.exceptions.ConnectionError:
-                bot_reply = requests.post(FASTAPI_URL, params={"user_message": user_input})
+                    st.write(bot_reply)
 
-            # 3. Display and store assistant response
-            st.write(bot_reply)
+            except requests.exceptions.ConnectionError:
+                bot_reply = "Error: Could not connect to the FastAPI server. Please check if it's running."
+                st.write(bot_reply)
+                
+            # 4. Store the final complete response in session state
             st.session_state.messages.append({"role": "assistant", "content": bot_reply})

@@ -4,6 +4,7 @@ import uvicorn
 import asyncio
 from langgraph.graph import StateGraph, START, END
 from typing import Optional, TypedDict, Literal
+from fastapi.responses import StreamingResponse
 # Call it to load variables from a .env file into os.environ
 load_dotenv()
 
@@ -45,21 +46,21 @@ def llm_call(state: agent_state):
       response = llm.invoke(state["message"])
       return {"message":response.content}
 
-
-
-
 app =FastAPI()
 
 @app.post("/llm-chat")
 async def llm_chat(user_message:str):
-    agent_graph = StateGraph(agent_state)
+    agent_graph = StateGraph(agent_state) 
     agent_graph.add_node("llm-call",llm_call)
     agent_graph.add_edge(START,"llm-call")
     agent_graph.add_edge("llm-call",END)
     agent_graph= agent_graph.compile()
-    respo = agent_graph.invoke({"message":user_message})
-    return respo["message"]
-
+    async def response_generator():
+        async for chunk, metadata in agent_graph.astream({"message": user_message}, stream_mode="messages"):
+            if metadata.get("langgraph_node") == "llm-call":
+                if chunk.content:
+                    yield chunk.content
+    return StreamingResponse(response_generator(), media_type="text/plain")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
