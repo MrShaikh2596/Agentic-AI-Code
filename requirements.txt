@@ -17,3 +17,4 @@ uvicorn
 streamlit 
 requests
 langchain_groq
+Ipython

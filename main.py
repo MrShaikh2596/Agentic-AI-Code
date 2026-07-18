@@ -3,18 +3,15 @@ from fastapi import FastAPI
 import uvicorn
 import asyncio
 from langgraph.graph import StateGraph, START, END
-from typing import Optional, TypedDict, Literal
+from typing import Any, Optional, TypedDict, Literal
 from fastapi.responses import StreamingResponse
+from tools import search_tool, calculator, get_stock_price
+from langgraph.prebuilt import ToolNode, tools_condition
+import io
+from PIL import Image as PILImage
+
 # Call it to load variables from a .env file into os.environ
 load_dotenv()
-
-
-from langchain_tavily import TavilySearch
-
-tool = TavilySearch(
-    max_results=5,
-    topic="general"
-)
 
 # Basic usage
 
@@ -31,20 +28,24 @@ from langchain_groq import ChatGroq
 #     temperature=0,
 #     # other params...
 # )
+
+tools = [search_tool, get_stock_price, calculator]
+
+
 llm = ChatGroq(
     model="openai/gpt-oss-120b",
     temperature=0
 )
-# Initialize the Tavily Search tool
-tavily_search = TavilySearch(max_results=5, topic="general")
+llm_with_tools = llm.bind_tools(tools)
+
 
 class agent_state(TypedDict):
-    message: str 
+    messages: list[Any]
 
 
 def llm_call(state: agent_state):
-      response = llm.invoke(state["message"])
-      return {"message":response.content}
+    response = llm_with_tools.invoke(state["messages"])
+    return {"messages": [response]}
 
 app =FastAPI()
 
@@ -52,15 +53,29 @@ app =FastAPI()
 async def llm_chat(user_message:str):
     agent_graph = StateGraph(agent_state) 
     agent_graph.add_node("llm-call",llm_call)
+    agent_graph.add_node("tools",ToolNode(tools=tools))
     agent_graph.add_edge(START,"llm-call")
-    agent_graph.add_edge("llm-call",END)
+    agent_graph.add_conditional_edges( "llm-call",tools_condition)
     agent_graph= agent_graph.compile()
     async def response_generator():
-        async for chunk, metadata in agent_graph.astream({"message": user_message}, stream_mode="messages"):
-            if metadata.get("langgraph_node") == "llm-call":
-                if chunk.content:
+        async for chunk, metadata in agent_graph.astream({"messages": [user_message]}, stream_mode="messages"):
                     yield chunk.content
     return StreamingResponse(response_generator(), media_type="text/plain")
+    #return agent_graph.invoke({"messages": [user_message]})
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+
+
+
+# agent_graph = StateGraph(agent_state) 
+# agent_graph.add_node("llm-call",llm_call)
+# agent_graph.add_node("tools",ToolNode(tools=tools))
+# agent_graph.add_edge(START,"llm-call")
+
+# # agent_graph.add_edge("llm-call",END)
+# agent_graph= agent_graph.compile()
+
+# with open("graph.png", "wb") as f:
+#     f.write(agent_graph.get_graph().draw_mermaid_png())
+
