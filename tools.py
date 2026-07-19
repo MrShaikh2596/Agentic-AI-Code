@@ -8,7 +8,7 @@ search_tool = TavilySearch(
     topic="general"
 )
 
-@tool
+@tool("calculator")
 def calculator(first_num: float, second_num: float, operation: str) -> dict:
     """
     Perform a basic arithmetic operation on two numbers.
@@ -32,7 +32,7 @@ def calculator(first_num: float, second_num: float, operation: str) -> dict:
     except Exception as e:
         return {"error": str(e)}
 
-@tool
+@tool("get_stock_price")
 def get_stock_price(symbol: str) -> dict:
     """
     Fetch latest stock price for a given symbol (e.g. 'AAPL', 'TSLA') 
@@ -41,4 +41,9 @@ def get_stock_price(symbol: str) -> dict:
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=YVY4J6UVY3H32AP8"
     r = requests.get(url)
     return r.json()
+# tools = [get_stock_price, calculator,search_tool]
 
+# from langchain_core.utils.function_calling import convert_to_openai_tool
+# for t in tools:
+#     print(type(t), getattr(t, "name", None), getattr(t, "description", None))
+#     print(convert_to_openai_tool(t))
