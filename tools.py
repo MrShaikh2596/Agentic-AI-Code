@@ -9,7 +9,7 @@ search_tool = TavilySearch(
 )
 
 @tool("calculator")
-def calculator(first_num: float, second_num: float, operation: str) -> dict:
+async def calculator(first_num: float, second_num: float, operation: str) -> dict:
     """
     Perform a basic arithmetic operation on two numbers.
     Supported operations: add, sub, mul, div
@@ -33,13 +33,13 @@ def calculator(first_num: float, second_num: float, operation: str) -> dict:
         return {"error": str(e)}
 
 @tool("get_stock_price")
-def get_stock_price(symbol: str) -> dict:
+async def get_stock_price(symbol: str) -> dict:
     """
     Fetch latest stock price for a given symbol (e.g. 'AAPL', 'TSLA') 
     using Alpha Vantage with API key in the URL.
     """
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=YVY4J6UVY3H32AP8"
-    r = requests.get(url)
+    r =  requests.get(url)
     return r.json()
 # tools = [get_stock_price, calculator,search_tool]
 

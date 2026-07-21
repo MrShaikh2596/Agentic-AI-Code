@@ -32,7 +32,7 @@ from langchain_groq import ChatGroq
 #     # other params...
 # )
 
-tools = [get_stock_price, calculator]
+tools = [search_tool,get_stock_price, calculator]
 
 
 llm = ChatGroq(
@@ -46,8 +46,8 @@ class agent_state(TypedDict):
     messages: Annotated[list[Any], add_messages]
 
 
-def llm_call(state: agent_state):
-    response = llm_with_tools.invoke(state["messages"])
+async def llm_call(state: agent_state):
+    response =  await llm_with_tools.ainvoke(state["messages"])
     return {"messages": [response]}
 
 app =FastAPI()
