@@ -7,10 +7,10 @@ from langgraph.graph.message import add_messages
 from typing import Any, Annotated, Optional, TypedDict, Literal
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
-from tools import search_tool, calculator, get_stock_price
 from langgraph.prebuilt import ToolNode, tools_condition
 import io
 from PIL import Image as PILImage
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
 # Call it to load variables from a .env file into os.environ
@@ -32,14 +32,25 @@ from langchain_groq import ChatGroq
 #     # other params...
 # )
 
-tools = [search_tool,get_stock_price, calculator]
+
+client = MultiServerMCPClient(
+    {
+        "AgenticAI Tools Server": {
+            "transport": "streamable_http",
+            "url": "http://127.0.0.1:8200/mcp",
+        }
+    }
+)
+
+
+
 
 
 llm = ChatGroq(
     model="openai/gpt-oss-120b",
     temperature=0
 )
-llm_with_tools = llm.bind_tools(tools)
+
 
 
 class agent_state(TypedDict):
@@ -47,6 +58,9 @@ class agent_state(TypedDict):
 
 
 async def llm_call(state: agent_state):
+    tools = await client.get_tools()
+    #print("Tools available from MCP server:", tools)
+    llm_with_tools = llm.bind_tools(tools)
     response =  await llm_with_tools.ainvoke(state["messages"])
     return {"messages": [response]}
 
@@ -54,6 +68,7 @@ app =FastAPI()
 
 @app.post("/llm-chat")
 async def llm_chat(user_message:str):
+    tools = await client.get_tools()
     agent_graph = StateGraph(agent_state) 
     agent_graph.add_node("llm-call",llm_call)
     agent_graph.add_node("tools",ToolNode(tools=tools))

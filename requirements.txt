@@ -18,3 +18,5 @@ streamlit
 requests
 langchain_groq
 Ipython
+fastmcp
+langchain_mcp_adapters
