@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 import uvicorn
 import asyncio
+import os
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from typing import Any, Annotated, Optional, TypedDict, Literal
@@ -33,14 +34,28 @@ from langchain_groq import ChatGroq
 #     # other params...
 # )
 
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+SLACK_TEAM_ID = os.getenv("SLACK_TEAM_ID")
+
+
 
 client = MultiServerMCPClient(
     {
         "AgenticAI Tools Server": {
             "transport": "streamable_http",
             "url": "http://127.0.0.1:8200/mcp",
-        }
+        },
+        "slack": {
+                        "command": "npx",
+                        "args": ["-y", "@modelcontextprotocol/server-slack"],
+                        "transport": "stdio",
+                        "env": {
+                            "SLACK_BOT_TOKEN": SLACK_BOT_TOKEN,
+                            "SLACK_TEAM_ID": SLACK_TEAM_ID,
+                        },
+                    }
     }
+            
 )
 
 
@@ -72,7 +87,7 @@ app = FastAPI()
 async def llm_chat(user_message: str):
     async def response_generator():
         # Keep the MCP session open for the lifetime of the stream
-        async with client.session("AgenticAI Tools Server") as session:
+        async with client.session("slack") as session:
             tools = await load_mcp_tools(session)
 
             # per-request llm_call captures the live `tools`
