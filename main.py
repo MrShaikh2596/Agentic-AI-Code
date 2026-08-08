@@ -12,7 +12,6 @@ from langgraph.prebuilt import ToolNode, tools_condition
 import io
 from PIL import Image as PILImage
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.tools import load_mcp_tools
 
 
 # Call it to load variables from a .env file into os.environ
@@ -73,48 +72,40 @@ class agent_state(TypedDict):
     messages: Annotated[list[Any], add_messages]
 
 
-async def llm_call(state: agent_state):
-    async with client.session("AgenticAI Tools Server") as session:
-        tools = await load_mcp_tools(session)
-    # print("Tools available from MCP server:", tools)
-    llm_with_tools = llm.bind_tools(tools)
-    response = await llm_with_tools.ainvoke(state["messages"])
-    return {"messages": [response]}
-
 app = FastAPI()
 
 @app.post("/llm-chat")
 async def llm_chat(user_message: str):
     async def response_generator():
-        # Keep the MCP session open for the lifetime of the stream
-        async with client.session("slack") as session:
-            tools = await load_mcp_tools(session)
+        # Aggregate tools from ALL configured MCP servers (AgenticAI Tools Server + slack).
+        # get_tools() manages its own sessions per server, so no manual client.session() is needed.
+        tools = await client.get_tools()
 
-            # per-request llm_call captures the live `tools`
-            async def llm_call_local(state: agent_state):
-                llm_with_tools = llm.bind_tools(tools)
-                response = await llm_with_tools.ainvoke(state["messages"])
-                return {"messages": [response]}
+        # per-request llm_call captures the live `tools`
+        async def llm_call_local(state: agent_state):
+            llm_with_tools = llm.bind_tools(tools)
+            response = await llm_with_tools.ainvoke(state["messages"])
+            return {"messages": [response]}
 
-            agent_graph = StateGraph(agent_state)
-            agent_graph.add_node("llm-call", llm_call_local)
-            agent_graph.add_node("tools", ToolNode(tools=tools))
-            agent_graph.add_edge(START, "llm-call")
-            agent_graph.add_conditional_edges("llm-call", tools_condition)
-            agent_graph.add_edge("tools", "llm-call")
-            agent_graph = agent_graph.compile()
+        agent_graph = StateGraph(agent_state)
+        agent_graph.add_node("llm-call", llm_call_local)
+        agent_graph.add_node("tools", ToolNode(tools=tools))
+        agent_graph.add_edge(START, "llm-call")
+        agent_graph.add_conditional_edges("llm-call", tools_condition)
+        agent_graph.add_edge("tools", "llm-call")
+        agent_graph = agent_graph.compile()
 
-            async for chunk, metadata in agent_graph.astream(
-                {"messages": [HumanMessage(content=user_message)]},
-                stream_mode="messages",
+        async for chunk, metadata in agent_graph.astream(
+            {"messages": [HumanMessage(content=user_message)]},
+            stream_mode="messages",
+        ):
+            # Only stream the LLM's final answer: skip tool-call chunks and empty content
+            if (
+                metadata.get("langgraph_node") == "llm-call"
+                and not getattr(chunk, "tool_call_chunks", None)
+                and chunk.content
             ):
-                # Only stream the LLM's final answer: skip tool-call chunks and empty content
-                if (
-                    metadata.get("langgraph_node") == "llm-call"
-                    and not getattr(chunk, "tool_call_chunks", None)
-                    and chunk.content
-                ):
-                    yield chunk.content
+                yield chunk.content
 
     return StreamingResponse(response_generator(), media_type="text/plain")
    #return agent_graph.invoke({"messages": [user_message]})
