@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 import uvicorn
 import asyncio
+import logging
 import os
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -12,6 +13,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 import io
 from PIL import Image as PILImage
 from langchain_mcp_adapters.client import MultiServerMCPClient
+
 
 
 # Call it to load variables from a .env file into os.environ
@@ -25,6 +27,7 @@ from langchain.agents import create_agent
 from langchain_tavily import TavilySearch
 from langchain_ollama import ChatOllama
 from langchain_groq import ChatGroq
+from langgraph.checkpoint.memory import InMemorySaver
 
 # llm = ChatOllama(
 #     #model="qwen3.5:0.8b",
@@ -35,7 +38,39 @@ from langchain_groq import ChatGroq
 
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_TEAM_ID = os.getenv("SLACK_TEAM_ID")
+DEBUG_CHECKPOINTER = os.getenv("DEBUG_CHECKPOINTER", "1").lower() in {"1", "true", "yes", "on"}
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("checkpointer_debug")
+logger.setLevel(logging.DEBUG)
+
+
+def log_checkpointer_state(label: str, graph: Any, checkpointer: Any, config: dict[str, Any]) -> None:
+    if not DEBUG_CHECKPOINTER:
+        return
+
+    logger.debug("%s checkpointer: %s", label, checkpointer)
+    logger.debug("%s config: %s", label, config)
+
+    state_method = getattr(graph, "get_state", None)
+    if callable(state_method):
+        try:
+            state_value = state_method(config)
+            logger.debug("%s state via graph.get_state: %s", label, state_value)
+        except Exception as exc:
+            logger.debug("%s graph.get_state failed: %s", label, exc)
+    else:
+        logger.debug("%s graph.get_state is unavailable for this graph", label)
+
+    history_method = getattr(graph, "get_state_history", None)
+    if callable(history_method):
+        try:
+            history_value = history_method(config)
+            logger.debug("%s history via graph.get_state_history: %s", label, history_value)
+        except Exception as exc:
+            logger.debug("%s graph.get_state_history failed: %s", label, exc)
+    else:
+        logger.debug("%s graph.get_state_history is unavailable for this graph", label)
 
 
 client = MultiServerMCPClient(
@@ -93,11 +128,16 @@ async def llm_chat(user_message: str):
         agent_graph.add_edge(START, "llm-call")
         agent_graph.add_conditional_edges("llm-call", tools_condition)
         agent_graph.add_edge("tools", "llm-call")
-        agent_graph = agent_graph.compile()
+        checkpointer = InMemorySaver()
+        agent_graph = agent_graph.compile(checkpointer=checkpointer)
+        config1 = {"configurable": {"thread_id": "1"}}
+        log_checkpointer_state("before-invocation", agent_graph, checkpointer, config1)
 
         async for chunk, metadata in agent_graph.astream(
             {"messages": [HumanMessage(content=user_message)]},
             stream_mode="messages",
+            config=config1
+
         ):
             # Only stream the LLM's final answer: skip tool-call chunks and empty content
             if (
@@ -106,6 +146,8 @@ async def llm_chat(user_message: str):
                 and chunk.content
             ):
                 yield chunk.content
+
+        log_checkpointer_state("after-invocation", agent_graph, checkpointer, config1)
 
     return StreamingResponse(response_generator(), media_type="text/plain")
    #return agent_graph.invoke({"messages": [user_message]})
