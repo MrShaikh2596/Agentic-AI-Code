@@ -33,8 +33,7 @@ DEBUG_CHECKPOINTER = os.getenv("DEBUG_CHECKPOINTER", "1").lower() in {"1", "true
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("checkpointer_debug")
 logger.setLevel(logging.DEBUG)
-connection = #commented-for -git -commit
-
+connection = os.getenv("CONNECTION")
 
 # llm = ChatOllama(
 #     #model="qwen3.5:0.8b",
@@ -107,7 +106,7 @@ class agent_state(TypedDict):
 app = FastAPI()
 
 @app.post("/llm-chat")
-async def llm_chat(user_message: str):
+async def llm_chat(user_message: str,thread_id :str):
     async def response_generator():
         # Aggregate tools from ALL configured MCP servers (AgenticAI Tools Server + slack).
         # get_tools() manages its own sessions per server, so no manual client.session() is needed.
@@ -149,7 +148,7 @@ async def llm_chat(user_message: str):
             memory = AsyncPostgresSaver(conn)
             checkpointer = memory
             agent_graph = agent_graph.compile(checkpointer=checkpointer)
-            config1 = {"configurable": {"thread_id": "1"}}
+            config1 = {"configurable": {"thread_id": thread_id}}
             #log_checkpointer_state("before-invocation", agent_graph, checkpointer, config1)
 
             async for chunk, metadata in agent_graph.astream(
